@@ -1,4 +1,4 @@
-export type JobSource = 'usajobs' | 'adzuna' | 'linkedin' | 'indeed'
+export type JobSource = 'adzuna' | 'linkedin' | 'indeed' | 'remotive'
 export type JobType = 'Remote' | 'Hybrid' | 'Onsite'
 export type ApplicationStatus = 'queued' | 'applied' | 'skipped' | 'interviewing' | 'offered' | 'rejected'
 

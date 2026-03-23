@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 
 export const metadata: Metadata = {
-  title: 'AgriCareer Pro — Auto Apply',
-  description: 'Automated job application dashboard for Joshua Abbey',
+  title: 'CareerPro AI — Smart Auto Apply',
+  description: 'AI-powered job discovery and auto-apply with tailored resumes',
 }
 
 export const viewport: Viewport = {

@@ -7,6 +7,7 @@ export const PROFILE = {
   phone: '(336) 457-2361',
   linkedin: 'linkedin.com/in/josh-abbey',
   github: 'github.com/jabbeycodes',
+  immigration_status: 'Green Card Holder (Permanent Resident)',
   eeo: {
     authorized_to_work: true,
     requires_sponsorship: false,
@@ -48,18 +49,49 @@ export const PROFILE = {
   },
 }
 
-const WEIGHTS = { field: 0.30, salary: 0.25, location: 0.20, experience: 0.15, education: 0.10 }
+const WEIGHTS = { skills: 0.30, salary: 0.25, location: 0.20, experience: 0.15, education: 0.10 }
 
-const AG_KEYWORDS = ['agricultur', 'agtech', 'agri', 'farm', 'crop', 'precision farm', 'food system', 'rural', 'livestock', 'sustainab', 'conservation', 'extension', 'soil', 'usda', 'commodity', 'irrigation', 'horticultur', 'forestry', 'harvest', 'grain', 'dairy', 'watershed']
-const TECH_KEYWORDS = ['program manager', 'project manager', 'operations manager', 'product manager', 'technology manager', 'data manager', 'process improvement', 'six sigma', 'lean', 'kpi', 'cross-functional']
+// Industry keyword groups — each maps to a tag and scoring category
+const INDUSTRY_KEYWORDS: Record<string, string[]> = {
+  'Agriculture': ['agricultur', 'agtech', 'agri', 'farm', 'crop', 'precision farm', 'food system', 'livestock', 'sustainab', 'conservation', 'soil', 'irrigation', 'horticultur', 'harvest', 'grain', 'dairy'],
+  'Operations': ['operations manager', 'operations director', 'supply chain', 'logistics', 'fulfillment', 'warehouse', 'continuous improvement', 'process improvement', 'six sigma', 'lean', 'quality', 'manufacturing'],
+  'Program/Project Mgmt': ['program manager', 'project manager', 'product manager', 'scrum master', 'agile', 'pmp', 'cross-functional', 'stakeholder', 'roadmap', 'initiative'],
+  'Data & Analytics': ['data analy', 'data scien', 'business intelligence', 'power bi', 'tableau', 'sql', 'python', 'machine learning', 'statistical', 'dashboard', 'reporting', 'analytics', 'data engineer', 'etl'],
+  'Technology': ['technology manager', 'software', 'developer', 'engineer', 'full stack', 'frontend', 'backend', 'react', 'flutter', 'node', 'typescript', 'devops', 'cloud', 'saas', 'api'],
+  'Management': ['manager', 'director', 'lead', 'supervisor', 'coordinator', 'team lead', 'workforce', 'compliance', 'people manager', 'staff'],
+}
+
+// Skills from resume that should boost match score
+const RESUME_SKILLS = ['six sigma', 'lean', 'python', 'sql', 'power bi', 'tableau', 'agile', 'scrum', 'flutter', 'react', 'supabase', 'kpi', 'compliance', 'workforce planning', 'data-driven', 'continuous improvement', 'cross-functional']
+
+export function detectIndustry(title: string, description: string): string[] {
+  const text = `${title} ${description}`.toLowerCase()
+  const matches: string[] = []
+  for (const [industry, keywords] of Object.entries(INDUSTRY_KEYWORDS)) {
+    const count = keywords.filter(k => text.includes(k)).length
+    if (count >= 2 || (count >= 1 && industry === 'Agriculture')) {
+      matches.push(industry)
+    }
+  }
+  return matches.length > 0 ? matches : ['General']
+}
 
 export function scoreJob(title: string, company: string, description: string, location: string, salaryMin: number | null, salaryMax: number | null, jobType: string): JobScores {
   const text = `${title} ${company} ${description}`.toLowerCase()
 
-  const agMatches = AG_KEYWORDS.filter(k => text.includes(k)).length
-  const techMatches = TECH_KEYWORDS.filter(k => text.includes(k)).length
-  const fieldScore = Math.min(100, Math.round((agMatches / AG_KEYWORDS.length) * 70 * 1.8 + (techMatches / TECH_KEYWORDS.length) * 30 * 2) + (agMatches > 0 ? 20 : 0))
+  // Skills match — how many of the candidate's skills are mentioned
+  const skillMatches = RESUME_SKILLS.filter(k => text.includes(k)).length
+  // Industry relevance — how many industry keyword groups match
+  let industryHits = 0
+  for (const keywords of Object.values(INDUSTRY_KEYWORDS)) {
+    industryHits += keywords.filter(k => text.includes(k)).length
+  }
+  const skillsScore = Math.min(100, Math.round(
+    (skillMatches / RESUME_SKILLS.length) * 60 +
+    Math.min(industryHits, 10) * 4
+  ))
 
+  // Salary scoring
   const salaryMid = salaryMin && salaryMax ? (salaryMin + salaryMax) / 2 : salaryMin ?? salaryMax ?? 0
   let salaryScore = 50
   if (salaryMid >= 100000) salaryScore = 100
@@ -69,6 +101,7 @@ export function scoreJob(title: string, company: string, description: string, lo
   else if (salaryMid >= 70000) salaryScore = 55
   else if (salaryMid > 0) salaryScore = 30
 
+  // Location scoring
   const loc = location.toLowerCase()
   const isRemote = jobType === 'Remote' || loc.includes('remote')
   const isColumbia = loc.includes('columbia') && loc.includes('mo')
@@ -79,15 +112,30 @@ export function scoreJob(title: string, company: string, description: string, lo
   else if (salaryMid >= 80000) locationScore = 70
   else locationScore = 30
 
-  const expKeywords = ['manager', 'director', 'lead', 'supervisor', 'coordinator', 'operations', 'program', 'workforce', 'compliance']
-  const expScore = Math.min(100, 40 + expKeywords.filter(k => text.includes(k)).length * 8)
+  // Experience level match
+  const expKeywords = ['manager', 'director', 'lead', 'supervisor', 'coordinator', 'operations', 'program', 'workforce', 'compliance', 'area manager', 'team lead']
+  const expScore = Math.min(100, 40 + expKeywords.filter(k => text.includes(k)).length * 7)
 
-  const eduKeywords = ['agricultural', 'agriculture', 'technology management', 'data science', 'bachelor', 'master', 'degree']
+  // Education match
+  const eduKeywords = ['agricultural', 'agriculture', 'technology management', 'data science', 'bachelor', 'master', 'degree', 'mba', 'stem']
   const eduScore = Math.min(100, 50 + eduKeywords.filter(k => text.includes(k)).length * 10)
 
-  const total = Math.round(fieldScore * WEIGHTS.field + salaryScore * WEIGHTS.salary + locationScore * WEIGHTS.location + expScore * WEIGHTS.experience + eduScore * WEIGHTS.education)
+  const total = Math.round(
+    skillsScore * WEIGHTS.skills +
+    salaryScore * WEIGHTS.salary +
+    locationScore * WEIGHTS.location +
+    expScore * WEIGHTS.experience +
+    eduScore * WEIGHTS.education
+  )
 
-  return { field: Math.min(100, fieldScore), salary: salaryScore, location: locationScore, experience: Math.min(100, expScore), education: Math.min(100, eduScore), total }
+  return {
+    field: Math.min(100, skillsScore),
+    salary: salaryScore,
+    location: locationScore,
+    experience: Math.min(100, expScore),
+    education: Math.min(100, eduScore),
+    total,
+  }
 }
 
 export function getResumeText(): string {
