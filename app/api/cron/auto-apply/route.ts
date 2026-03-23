@@ -14,29 +14,48 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MAX_APPLICATIONS_PER_RUN = 2
 
 async function generateCoverLetter(job: { title: string; company: string; location: string; salary_text: string; description: string }): Promise<string> {
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
-      messages: [{
-        role: 'user',
-        content: `You are a professional career coach. Write a tailored cover letter for Joshua Abbey (Green Card holder, M.S. Technology Management/Data Science, B.S. Agricultural Science, Six Sigma Green Belt, Amazon Area Manager experience). Rules: 3 tight paragraphs, under 260 words, NO generic phrases. Start with "Dear Hiring Manager,"
+  try {
+    const res = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        messages: [{
+          role: 'user',
+          content: `You are a professional career coach. Write a tailored cover letter for Joshua Abbey (Green Card holder, M.S. Technology Management/Data Science, B.S. Agricultural Science, Six Sigma Green Belt, Amazon Area Manager experience). Rules: 3 tight paragraphs, under 260 words, NO generic phrases. Start with "Dear Hiring Manager,"
 
 JOB: ${job.title} at ${job.company} | ${job.location} | ${job.salary_text}
 ${job.description}
 
 Write ONLY the cover letter.`
-      }],
-    }),
-  })
-  const data = await res.json()
-  return data?.content?.[0]?.text || ''
+        }],
+      }),
+    })
+    const data = await res.json()
+    const text = data?.content?.[0]?.text
+    if (text) return text
+  } catch { /* fall through to fallback */ }
+
+  return fallbackCoverLetter(job)
+}
+
+function fallbackCoverLetter(job: { title: string; company: string; location: string }): string {
+  return `Dear Hiring Manager,
+
+My background sits at the exact intersection the ${job.title} role at ${job.company} demands — a B.S. in Agricultural Science & Technology from the University of Ghana, combined with an M.S. in Technology Management (Data Science) from NC A&T, and four-plus years managing multi-site operations and teams up to 200 people while applying Six Sigma methodology to drive measurable improvement.
+
+At Lifepath of Mid-Missouri I currently direct 10 service locations — building compliance frameworks, analytics dashboards, and standardised workflows operating 24/7. At Amazon I scaled workforce operations from baseline to peak-season surge capacity across 50–200 associates. Both roles demanded the cross-functional leadership, data fluency, and operational discipline ${job.company} is looking for.${job.location === 'Remote' ? ' I am fully equipped for remote collaboration with a consistent record of delivering results across distributed operations.' : ''}
+
+I would welcome the opportunity to bring this combination of agricultural expertise and technology management to your team.
+
+Sincerely,
+${PROFILE.name}
+${PROFILE.location} | ${PROFILE.phone} | ${PROFILE.email}`
 }
 
 export async function GET(req: NextRequest) {
@@ -137,6 +156,8 @@ export async function GET(req: NextRequest) {
           generateCoverLetter(job),
         ])
 
+        log.push(`  Resume: ${tailoredResumeText.length} chars | CL: ${coverLetterText.length} chars`)
+
         // 4c. Generate PDFs (parallel)
         log.push('  ⟳ Generating PDFs...')
         const [resumePdf, coverLetterPdf] = await Promise.all([
@@ -163,26 +184,28 @@ export async function GET(req: NextRequest) {
         }
 
         // 4f. Update application record with all data
+        // Mark as 'applied' if ATS submitted, otherwise 'queued' for manual apply
+        const finalStatus = submission.success ? 'applied' : 'queued'
         const updateData: Record<string, any> = {
-          status: submission.success ? 'applied' : 'queued',
-          cover_letter: coverLetterText,
+          status: finalStatus,
+          cover_letter: coverLetterText || null,
           applied_at: submission.success ? new Date().toISOString() : null,
         }
 
-        // Try to update with new columns, fall back to base columns if they don't exist
-        const { error: updateErr } = await supabase.from('applications').update({
-          ...updateData,
+        // Always update base columns first (guaranteed to exist)
+        const { error: baseUpdateErr } = await supabase.from('applications').update(updateData).eq('id', appId)
+        if (baseUpdateErr) {
+          log.push(`  ⚠ Base update error: ${baseUpdateErr.message}`)
+        }
+
+        // Then try to update extended columns (may not exist yet — that's OK)
+        await supabase.from('applications').update({
           tailored_resume_text: tailoredResumeText,
           tailored_resume_url: resumeUrl,
           cover_letter_url: coverLetterUrl,
           submission_method: submission.method,
           submission_response: submission.response || submission.error || null,
         }).eq('id', appId)
-
-        if (updateErr) {
-          // Fallback: update only base columns (new columns may not exist yet)
-          await supabase.from('applications').update(updateData).eq('id', appId)
-        }
 
         applied++
         log.push(`  ✓ Application saved | Resume: ${resumeUrl ? 'uploaded' : 'failed'} | Cover letter: ${coverLetterUrl ? 'uploaded' : 'failed'}`)

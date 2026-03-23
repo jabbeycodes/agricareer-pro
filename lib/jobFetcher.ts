@@ -11,28 +11,14 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
 
   // Queries spanning all industries Josh qualifies for
   const queries = [
-    // Operations & Management
     'operations manager',
     'program manager',
     'project manager',
-    'area manager',
-    'continuous improvement manager',
-    'supply chain manager',
-    // Data & Analytics
     'data analyst',
-    'business intelligence analyst',
-    'data science manager',
-    // Agriculture & AgTech
     'agriculture manager',
-    'agtech operations',
-    'food systems technology',
-    'precision agriculture',
-    // Technology
-    'technology manager',
-    'product manager software',
-    // Process / Six Sigma
+    'product manager',
     'six sigma',
-    'process improvement manager',
+    'supply chain manager',
   ]
 
   for (const query of queries) {
@@ -46,7 +32,7 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
         sort_by: 'date',
       })
       const res = await fetch(`https://api.adzuna.com/v1/api/jobs/us/search/1?${params}`, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(8000),
       })
       if (!res.ok) continue
       const data = await res.json()
@@ -106,7 +92,7 @@ async function fetchRemotiveJobs(): Promise<Job[]> {
   for (const category of categories) {
     try {
       const res = await fetch(`https://remotive.com/api/remote-jobs?category=${category}&limit=30`, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(8000),
       })
       if (!res.ok) continue
       const data = await res.json()
@@ -170,16 +156,11 @@ async function fetchWithPerplexity(): Promise<Job[]> {
   const key = process.env.PERPLEXITY_API_KEY
   if (!key) return []
 
-  // Diverse queries matching Josh's full resume
+  // Consolidated queries to stay within timeout budget
   const searches = [
-    'remote operations manager jobs 2026 salary $90k+ six sigma lean',
-    'remote program manager jobs 2026 salary $80k+ agile cross-functional',
-    'remote data analyst business intelligence jobs 2026 python sql power bi',
-    'remote agriculture technology manager jobs 2026',
-    'remote supply chain manager continuous improvement jobs 2026',
-    'remote product manager SaaS jobs 2026 salary $90k+',
-    'remote project manager technology jobs 2026 salary $80k+',
-    'process improvement manager remote OR Columbia Missouri 2026',
+    'remote operations manager OR program manager jobs 2026 salary $80k+ six sigma agile',
+    'remote data analyst OR business intelligence OR agriculture technology jobs 2026 python sql',
+    'remote product manager OR project manager OR supply chain manager jobs 2026 salary $90k+',
   ]
   const jobs: Job[] = []
   const seen = new Set<string>()
