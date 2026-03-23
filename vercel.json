@@ -1,1 +1,12 @@
-{ "framework": "nextjs", "buildCommand": "next build", "installCommand": "npm install", "outputDirectory": ".next" }
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/auto-apply",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
