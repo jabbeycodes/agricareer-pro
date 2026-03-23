@@ -5,13 +5,13 @@ import { tailorResume } from '@/lib/resumeTailor'
 import { generateResumePdf, generateCoverLetterPdf } from '@/lib/pdfGenerator'
 import { uploadPdf } from '@/lib/storageUploader'
 import { submitApplication } from '@/lib/submitter'
-import { PROFILE, getResumeText } from '@/lib/profile'
+import { PROFILE } from '@/lib/profile'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300
+export const maxDuration = 60
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
-const MAX_APPLICATIONS_PER_RUN = 3
+const MAX_APPLICATIONS_PER_RUN = 2
 
 async function generateCoverLetter(job: { title: string; company: string; location: string; salary_text: string; description: string }): Promise<string> {
   const res = await fetch(ANTHROPIC_URL, {
